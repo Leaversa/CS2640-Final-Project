@@ -1,74 +1,133 @@
 .data
-test: .asciiz "I M goINg iNsANeAAAA"
 
-LOWER_START: .word 97
-LOWER_END: .word 122
+# Dialog/Message Prompts
+promptOperation:		.asciiz "Would you like to encrypt or decrypt? (Yes for Encrypt) (No For Decrypt) "
+promptInput:			.asciiz "Enter a string: "
+promptShift:			.asciiz "Enter a shift value: "
+promptEncryptResult:	.asciiz "Encrypted String: \n"
+promptDecryptResult:	.asciiz "Decrypted String: \n"
 
-UPPER_START: .word 65
-UPPER_END: .word 90
+# Input Buffer
+buffer: .space 500
 
-ALPHA_RANGE:  .word 26
+# Constants
+LOWER_START:	.word 97
+LOWER_END:		.word 122
+
+UPPER_START:	.word 65
+UPPER_END:		.word 90
+
+ALPHA_RANGE:	.word 26
+
 .text
 main:
 
-# load string into $t0
-la $t0, test
+# Prompt user for string input
+li		$v0, 54
+la		$a0, promptInput
+la 		$a1, buffer
+la		$a2, 499
+syscall
 
-# Loop through each char of the string
+
+# Prompt user for Encrypt or Decrypt
+li		$v0, 50
+la		$a0, promptOperation
+syscall
+
+beq		$a0, 2, exit
+move	$t2, $a0 # $v0 = 0 if encrypt, 1 if decrypt
+
+# Prompt user for shift value
+li		$v0, 51
+la		$a0, promptShift
+syscall
+
+# $a0 = shift value
+bgt		$a1, 0, exit # exit if cancel or read failed
+
+j MODSTR
+
+
+# print the cipher text
+result:
+
+	# If decrypting, print the decrypted prompt
+	# else print the encrypted prompt
+	la		$a0, promptEncryptResult
+	la		$t0, promptDecryptResult
+	movn	$a0, $t0, $t2
+
+	li		$v0, 59
+	la		$a1, buffer
+	syscall
+
+	j exit
+
+# --------------------------------
+# MOD STRING THROUGH CHAR LOOP
+# --------------------------------
+MODSTR:
+la		$t0, buffer # $t0 = string pointer
+move	$t1, $a0 # $t1 = shift value
+# $t2 = 0 if encrypt, 1 if decrypt
+
+# if decrypting, shift the other way
+sub		$t3, $zero, $t1 # negative shift
+movn	$t1, $t3, $t2 
+
 loop: 
 	# RESERVE $A0 FOR THE CHAR (WILL BE MOFDIFIED AFTER SHIFT)
 	# load char into $a0 with unsiged since ascii is positive
-	lbu   $a0, ($t0)
+	lbu		$a0, ($t0)
 
 	# exit conditions
-	beq $a0, 10, return # exit if newline
-	beq $a0, 0, return # exit if null terminating byte
-	beq $a0, 32, continue # continue if space
+	beq		$a0, 10, return # exit if newline
+	beq		$a0, 0, return # exit if null terminating byte
+
 
 
 	# $a3 = 65 if char uppercase
-	lw    $a1, UPPER_START
-	lw    $a2, UPPER_END
-	jal   IS_BETWEEN
-	movn $a3, $a1, $v0
-
+	lw		$a1, UPPER_START
+	lw		$a2, UPPER_END
+	jal		IS_BETWEEN
+	movn	$a3, $a1, $v0
+	move 	$v1, $v0
 
 	# $a3 = 97 if char lowercase
-	lw    $a1, LOWER_START
-	lw    $a2, LOWER_END
-	jal   IS_BETWEEN
-	movn $a3, $a1, $v0
+	lw		$a1, LOWER_START
+	lw		$a2, LOWER_END
+	jal		IS_BETWEEN
+	movn	$a3, $a1, $v0
 
+	# continue conditions
+	nor		$v0, $v0, $v1 # $v0 = -1 if char is not a letter
+	beq		$v0, -1, continue # continue if not a letter
 
+	# shift character by shift value
+	add		$a0, $a0, $t1
 
-	# hardcode shift char by 100
-	addi $a0, $a0, 100
-
-
-
-	move $a1, $a3
-	lw $a2, ALPHA_RANGE # range of characters
-	jal MODCHAR
+	# Shift char
+	move 	$a1, $a3
+	lw		$a2, ALPHA_RANGE # range of characters
+	jal		MODCHAR
 
 
 	# store shifted char back into buffer
-	move $a0, $v0
-	sb $a0, ($t0)
+	move	$a0, $v0
+	sb		$a0, ($t0)
 
 continue:
-	addi $t0, $t0, 1 # increment string pointer
-	j     loop
+	addi	$t0, $t0, 1 # increment string pointer
+	j		loop
 
 return:
-	j     exit
+	j	result
+
+
 
 exit:
-	# print the cipher texzt
-	li $v0,4
-	la $a0, test
-	syscall
-
-	li    $v0, 10
+	li	$v0, 10
 	syscall
 
 
@@ -78,14 +137,27 @@ exit:
 
 # MODCHAR
 # ($a0 = a, $a1 = b, $a2 = c)
-# 	shfits the range of char(a) between b & c
-# $v0 returns (a-b) % c + b
+# 	wraps a between b & b+c (inclusive)
+# $v0 returns the shifted char
 MODCHAR:
-	sub $s0, $a0, $a1 # a-b
-	div $s1, $s0, $a2 # % c
-	mfhi $s0
-	add $v0, $s0, $a1 # + b
-	jr   $ra
+	sub		$s0, $a0, $a1 # a-b
+	
+	# mod doesnt work with negative number so use
+	# the adjusted formula: (x % y + y) % y
+	
+	# (a-b) % c
+	div		$s0, $a2 
+	mfhi	$s0
+
+	# (a-b) % c + c
+	add		$s0, $s0, $a2
+	div		$s0, $a2
+	mfhi	$s0
+
+	# (a-b) % c + c + b
+	add		$v0, $s0, $a1
+
+	jr		$ra
 
 
 # IS_BETWEEN
@@ -93,8 +165,8 @@ MODCHAR:
 #	checks if val is between a and b
 # $v0 returns 1 a <= val <= b(inclusive), 0 otherwise
 IS_BETWEEN:
-    sge $s0, $a0, $a1 # a <= val
-    sle $s1, $a0, $a2 # val <= b
-    and $v0, $s0, $s1
-    jr $ra
+    sge		$s0, $a0, $a1 # a <= val
+    sle		$s1, $a0, $a2 # val <= b
+    and		$v0, $s0, $s1
+    jr		$ra
 	
