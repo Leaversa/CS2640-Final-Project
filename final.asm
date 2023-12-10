@@ -1,14 +1,17 @@
-.data
+# Ryan Lov, Matthew Kwong, Jason Agus, Max Lau
+# CS2640.01
+# Caesar Cipher
 
+.data
 # Dialog/Message Prompts
-promptOperation:		.asciiz "Would you like to encrypt or decrypt? (Yes for Encrypt) (No For Decrypt) "
-promptInput:			.asciiz "Enter a string: "
-promptShift:			.asciiz "Enter a shift value: "
-promptEncryptResult:	.asciiz "Encrypted String: \n"
-promptDecryptResult:	.asciiz "Decrypted String: \n"
+promptOperation:			.asciiz "Would you like to encrypt or decrypt? (Yes for Encrypt) (No For Decrypt) "
+promptInput:				.asciiz "Enter a string: "
+promptShift:				.asciiz "Enter a shift value: "
+promptEncryptResult:		.asciiz "Encrypted String: \n"
+promptDecryptResult:		.asciiz "Decrypted String: \n"
 
 # Input Buffer
-buffer: .space 500
+buffer: 		.space 500
 
 # Constants
 LOWER_START:	.word 97
@@ -23,28 +26,28 @@ ALPHA_RANGE:	.word 26
 main:
 
 # Prompt user for string input
-li		$v0, 54
-la		$a0, promptInput
-la 		$a1, buffer
-la		$a2, 499
+li			$v0, 54
+la			$a0, promptInput
+la 			$a1, buffer
+la			$a2, 499
 syscall
 
 
 # Prompt user for Encrypt or Decrypt
-li		$v0, 50
-la		$a0, promptOperation
+li			$v0, 50
+la			$a0, promptOperation
 syscall
 
-beq		$a0, 2, exit
-move	$t2, $a0 # $v0 = 0 if encrypt, 1 if decrypt
+beq			$a0, 2, exit
+move		$t2, $a0 # $v0 = 0 if encrypt, 1 if decrypt
 
 # Prompt user for shift value
-li		$v0, 51
-la		$a0, promptShift
+li			$v0, 51
+la			$a0, promptShift
 syscall
 
 # $a0 = shift value
-bgt		$a1, 0, exit # exit if cancel or read failed
+bgt			$a1, 0, exit # exit if cancel or read failed
 
 j MODSTR
 
@@ -54,27 +57,31 @@ result:
 
 	# If decrypting, print the decrypted prompt
 	# else print the encrypted prompt
+	jal 	JINGLE
+	
 	la		$a0, promptEncryptResult
 	la		$t0, promptDecryptResult
 	movn	$a0, $t0, $t2
-
+	
 	li		$v0, 59
 	la		$a1, buffer
 	syscall
-
-	j exit
+	
+	
+	
+	j	exit
 
 # --------------------------------
 # MOD STRING THROUGH CHAR LOOP
 # --------------------------------
 MODSTR:
-la		$t0, buffer # $t0 = string pointer
-move	$t1, $a0 # $t1 = shift value
+la			$t0, buffer # $t0 = string pointer
+move		$t1, $a0 # $t1 = shift value
 # $t2 = 0 if encrypt, 1 if decrypt
 
 # if decrypting, shift the other way
-sub		$t3, $zero, $t1 # negative shift
-movn	$t1, $t3, $t2 
+sub			$t3, $zero, $t1 # negative shift
+movn		$t1, $t3, $t2 
 
 loop: 
 	# RESERVE $A0 FOR THE CHAR (WILL BE MOFDIFIED AFTER SHIFT)
@@ -122,7 +129,7 @@ continue:
 	j		loop
 
 return:
-	j	result
+	j		result
 
 
 
@@ -169,4 +176,27 @@ IS_BETWEEN:
     sle		$s1, $a0, $a2 # val <= b
     and		$v0, $s0, $s1
     jr		$ra
-	
+
+
+# JINGLE
+# plays a little jingle when the operation is complete :D
+JINGLE:
+	.macro playNote(%note, %duration)
+		li $v0, 33
+		li $a0, %note
+		li $a1, %duration
+		li $a2, 97
+		li $a3, 100
+		syscall
+	.end_macro
+
+	playNote(80, 150)
+	playNote(76, 150)
+	playNote(80, 150)
+	playNote(82, 150)
+	playNote(84, 150)
+	playNote(82, 150)
+	playNote(80, 150)
+	playNote(76, 150)
+	playNote(75, 650)
+jr $ra
